@@ -37,7 +37,7 @@ class PHPFuzz:
         self.coverage = False
         
         # File system paths
-        self.test_root = "/home/phpfuzz/WorkSpace/flowfusion"  # Root directory for testing
+        self.test_root = "/home/phpfuzz/WorkSpace/ZendDiff"  # Root directory for testing
         self.php_root = f"{self.test_root}/php-src"            # PHP source code directory
         self.fused = f"{self.php_root}/tests/fused"            # Directory for fused test cases
         self.mutated = f"{self.php_root}/tests/mutated"        # Directory for mutated test cases
@@ -282,6 +282,7 @@ class PHPFuzz:
             if self.verification > 0:
                 # Find JIT output files (but not the verification ones)
                 if "_jit" in each_output and "_jit_check" not in each_output:
+                    self.total_count += 1
                     normal_out = each_output.replace("_jit", "")
                     jit_out = each_output
                     
@@ -392,60 +393,6 @@ class PHPFuzz:
         print("total check1[total,pass,fail]:", self.check1_count, self.check1_pass_count, self.check1_fail_count)
         print("total check2[total,pass,fail]:", self.check2_count, self.check2_pass_count, self.check2_fail_count)
         print("total check3[total,pass,fail]:", self.check3_count, self.check3_pass_count, self.check3_fail_count)
-
-    # Parse the test log for failed tests and possible bugs
-    def parse_log(self):
-        """
-        Parse PHP test logs to identify crashes and other severe issues.
-        
-        This looks for crashes, sanitizer reports, and core dumps in test outputs,
-        then copies relevant files to the bug folder.
-        """
-        known_crash_sites = ["leak"]  # Known issues to ignore
-
-        # Read test log
-        with open(self.log_path, "r") as f:
-            logs = f.read().strip("\n").split("\n")
-
-        next_log_id = len(os.listdir(self.bug_folder)) + 1
-        for eachlog in logs:
-            # Only process failed fusion tests
-            if "FAIL" not in eachlog or "tests/fused" not in eachlog:
-                continue
-                
-            # Extract test case path
-            casepath = self.php_root + "/" + eachlog.split("[")[-1].split("]")[0].replace(".phpt", "")
-            stdouterr = f"{casepath}.out"
-            
-            if not os.path.exists(stdouterr):
-                continue
-                
-            # Read test output
-            with open(stdouterr, "r", encoding="iso_8859_1") as f:
-                content = f.read()
-                self.total_count += 1
-                
-                # Track syntax errors
-                if "Parse error" in content:
-                    self.syntax_error_count += 1
-                    
-                # Skip memory leaks by default
-                if "leaked in" in content:
-                    continue
-                    
-                # Look for crashes (sanitizer reports or core dumps)
-                if "Sanitizer" in content or "(core dumped)" in content:
-                    # Create bug directory and move relevant files
-                    os.makedirs(f"{self.bug_folder}/{next_log_id}")
-                    shutil.move(f"{casepath}.out", f"{self.bug_folder}/{next_log_id}/test.out")
-                    shutil.move(f"{casepath}.php", f"{self.bug_folder}/{next_log_id}/test.php")
-                    shutil.move(f"{casepath}.phpt", f"{self.bug_folder}/{next_log_id}/test.phpt")
-                    shutil.move(f"{casepath}.sh", f"{self.bug_folder}/{next_log_id}/test.sh")
-                    next_log_id += 1
-
-    #
-    # UTILITY METHODS
-    #
 
     def clean(self):
         """
@@ -561,8 +508,8 @@ class PHPFuzz:
             
             # Fix permissions and clean up stray processes
             os.system(f"chmod -R 777 {self.test_root} 2>/dev/null")
-            os.system("kill -9 `ps aux | grep \"/home/phpfuzz/WorkSpace/flowfusion/php-src/sapi/cli/php\" | grep -v grep | awk '{print $2}'` > /dev/null 2>&1")
-            os.system("kill -9 `ps aux | grep \"/home/phpfuzz/WorkSpace/flowfusion/php-src/sapi/phpdbg/phpdbg\" | grep -v grep | awk '{print $2}'` > /dev/null 2>&1")
+            os.system("kill -9 `ps aux | grep \"/home/phpfuzz/WorkSpace/ZendDiff/php-src/sapi/cli/php\" | grep -v grep | awk '{print $2}'` > /dev/null 2>&1")
+            os.system("kill -9 `ps aux | grep \"/home/phpfuzz/WorkSpace/ZendDiff/php-src/sapi/phpdbg/phpdbg\" | grep -v grep | awk '{print $2}'` > /dev/null 2>&1")
             
             # Analyze results using differential testing
             self.zendiff_parse_log()
