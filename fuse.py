@@ -76,6 +76,11 @@ class Fusion():
         self.mutation = mutation  # Whether to mutate the original test case
         self.mut = Mutator()
 
+    def zendiff_nonjit(self):
+        nonjit_config = '''opcache.enable=1
+opcache.enable_cli=1'''
+        return nonjit_config
+
     def zendiff_jit(self):
         """
         Generate JIT configuration for ZendDiff testing.
@@ -85,10 +90,12 @@ class Fusion():
         """
         jit_init1 = '''opcache.enable=1
 opcache.enable_cli=1
+opcache.record_warnings=1
 opcache.jit=tracing
 opcache.jit_hot_func=1'''
         jit_init2 = '''opcache.enable=1
 opcache.enable_cli=1
+opcache.record_warnings=1
 opcache.jit=function'''
         jit_init = choice([jit_init1, jit_init2])
         return jit_init        
@@ -624,36 +631,41 @@ opcache.jit=''' + jit_mode + '\n'
         """
         # step 1: add nonjit and jit configurations
         jitconfig = self.zendiff_jit()
+        nonjit_config = self.zendiff_nonjit()
         if "--INI--" in test:
             test_config_section = test.split("--INI--")[1].split('--')[0]
-            test_config_section_lines = test_config_section.split('\n')
-            new_test_config_section_lines = []
-            for each in test_config_section_lines:
-                continue # dont keep any existing configuration
-                if "opcache." in each:
-                    continue
-                new_test_config_section_lines.append(each)
-            new_test_config_section = '\n'.join(new_test_config_section_lines)
-            nonjit_test = test.replace(test_config_section, new_test_config_section)
-            nonjit_test = nonjit_test.replace("--INI--\n--FILE--", "--FILE--")
-            nonjit_test = nonjit_test.replace("--INI----FILE--", "--FILE--")
-            jit_test = test.replace(test_config_section, '\n'+new_test_config_section+'\n'+jitconfig+'\n')
+            # test_config_section_lines = test_config_section.split('\n')
+            # new_test_config_section_lines = []
+            # for each in test_config_section_lines:
+            #    continue # dont keep any existing configuration
+            #    if "opcache." in each:
+            #        continue
+            #    new_test_config_section_lines.append(each)
+            # new_test_config_section = '\n'.join(new_test_config_section_lines)
+            # nonjit_test = test.replace(test_config_section, new_test_config_section)
+            # nonjit_test = nonjit_test.replace("--INI--\n--FILE--", "--FILE--")
+            # nonjit_test = nonjit_test.replace("--INI----FILE--", "--FILE--")
+            nonjit_test = test.replace("--FILE--", f"{nonjit_config}\n--FILE--")
+            jit_test = test.replace("--FILE--", f"{jitconfig}\n--FILE--")
+            #jit_test = test.replace(test_config_section, '\n'+jitconfig+'\n')
         else:
-            nonjit_test = test
+            nonjit_test = test.replace("--FILE--", f"--INI--\n{nonjit_config}\n--FILE--")
             jit_test = test.replace("--FILE--", f"--INI--\n{jitconfig}\n--FILE--")
 
-        # step 2: wrap code in function and call for hot function JIT variant
-        code = self.extract_sec(jit_test, "--FILE--")
-        hotfunc = self.zendiff_hotfunc_wrap(code)
-        hot_func_test = jit_test.replace(code, hotfunc)
+        return nonjit_test, jit_test
 
-        # step 3: wrap code in loop for hot loop JIT variant
-        code = self.extract_sec(jit_test, "--FILE--")
-        hotloop = self.zendiff_hotloop_wrap(code)
-        hot_loop_test = jit_test.replace(code, hotloop)
-        hot_loop_test = hot_loop_test.replace("opcache.jit_hot_func=1", "opcache.jit_hot_loop=1")
+        # # step 2: wrap code in function and call for hot function JIT variant
+        # code = self.extract_sec(jit_test, "--FILE--")
+        # hotfunc = self.zendiff_hotfunc_wrap(code)
+        # hot_func_test = jit_test.replace(code, hotfunc)
 
-        return nonjit_test, hot_func_test, hot_loop_test
+        # # step 3: wrap code in loop for hot loop JIT variant
+        # code = self.extract_sec(jit_test, "--FILE--")
+        # hotloop = self.zendiff_hotloop_wrap(code)
+        # hot_loop_test = jit_test.replace(code, hotloop)
+        # hot_loop_test = hot_loop_test.replace("opcache.jit_hot_func=1", "opcache.jit_hot_loop=1")
+
+        # return nonjit_test, hot_func_test, hot_loop_test
 
     # Main function to handle the test fusion process
     def main(self):
@@ -672,7 +684,8 @@ opcache.jit=''' + jit_mode + '\n'
             fused_test = fused_test.replace('?>','')
 
             # Create differential variants (non-JIT, hot function, hot loop)
-            nonjit_test, hot_func_test, hot_loop_test = self.zendiff(fused_test)
+            # nonjit_test, hot_func_test, hot_loop_test = self.zendiff(fused_test)
+            nonjit_test, jit_test = self.zendiff(fused_test)
 
             # Write PHP files (non-JIT version appears to have a typo: nonjit_php is not defined)
             # self.write_file(f"{self.php_root}/tests/fused/fused{self.fuse_count}.php", nonjit_php)  # Bug: nonjit_php not defined
@@ -680,7 +693,7 @@ opcache.jit=''' + jit_mode + '\n'
             # self.write_file(f"{self.php_root}/tests/fused/fused{self.fuse_count}_hot_loop.php", hot_loop_php)  # Bug: hot_loop_php not defined
 
             # Select one JIT test variant randomly
-            jit_test = choice([hot_func_test, hot_loop_test])
+            # jit_test = choice([hot_func_test, hot_loop_test])
 
             # Write PHPT test files with various verification levels
             self.write_file(f"{self.php_root}/tests/fused/fused{self.fuse_count}.phpt", nonjit_test)

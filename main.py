@@ -74,6 +74,7 @@ class PHPFuzz:
         """
         os.system(f"cp {self.php_root}/Makefile {self.test_root}/backup/")
         os.system(f"cp {self.php_root}/libtool {self.test_root}/backup/")
+        os.system(f"cp {self.php_root}/run-tests.php {self.test_root}/backup/")
 
     def patch_run_test(self):
         """
